@@ -1,0 +1,500 @@
+{
+  "name": "Multi-Agent Placement & Career Copilot — UNIFIED",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "streaming"
+        }
+      },
+      "id": "844dab79-fd92-43ad-a2e7-b9e2d6f486db",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1024,
+        208
+      ],
+      "webhookId": "ca335efc-4daf-4690-b99a-91992fe8df35"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst chatInput = $input.first().json.chatInput || '';\n\n// Match pattern: anything_digits (e.g. user@example.com_1723622400000)\nconst sessionPattern = /^(.+)_(\\d{10,15})$/;\nconst match = chatInput.trim().match(sessionPattern);\n\nlet sessionId = '';\nif (match) {\n  // The entire chatInput is a session_id — student pasted it as first message\n  sessionId = chatInput.trim();\n}\n\nreturn [{\n  json: {\n    chatInput: chatInput,\n    session_id: sessionId\n  }\n}];\n"
+      },
+      "id": "1ffd04a6-59e8-4130-9d50-79c50c197db8",
+      "name": "Extract Session ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "auk2YPZwsH52OCIT",
+          "cachedResultName": "dpdp_consent_records"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "keyValue": "={{ $json.session_id }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "df8b9347-c2dd-4e55-9a97-91138b7793cf",
+      "name": "Query Consent",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -464,
+        208
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst row = $input.first().json;\nconst sessionId = $('Extract Session ID').first().json.session_id || '';\nconst chatInput = $('Extract Session ID').first().json.chatInput || '';\n\n// Valid consent: row has a session_id, consent_given is true, withdrawn is false\nconst hasRow = !!row.session_id;\nconst consentGiven = row.consent_given === true || row.consent_given === 'true';\nconst notWithdrawn = row.withdrawn === false || row.withdrawn === 'false';\nconst hasConsent = hasRow && consentGiven && notWithdrawn;\n\nreturn [{\n  json: {\n    has_consent: hasConsent,\n    chatInput: chatInput,\n    session_id: sessionId\n  }\n}];\n"
+      },
+      "id": "16da6034-4897-43fe-b421-2faa633b1808",
+      "name": "Evaluate Consent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "consent-check",
+              "leftValue": "={{ $json.has_consent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "2941f183-5fd7-42db-8f42-debe4dc46a26",
+      "name": "Consent Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -240,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "restore-chat",
+              "name": "chatInput",
+              "value": "={{ $json.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "622640c8-de09-44ac-b064-6ef0640a08b3",
+              "name": "has_consent",
+              "value": "={{ $json.has_consent }}",
+              "type": "boolean"
+            },
+            {
+              "id": "ca89cbd6-7730-4b77-be04-77164c1bee12",
+              "name": "chatInput",
+              "value": "={{ $json.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "12059723-b74b-4043-9acc-450ad900bd4e",
+              "name": "session_id",
+              "value": "={{ $json.session_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d4d1c367-b464-40b4-a8e1-8662fe265568",
+      "name": "Restore Chat Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -32,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "You are the **Master Coordinator** of the \"Multi-Agent Placement & Career Copilot\" — an AI-powered career preparation system built to help college students ace their campus placements.\n\nYou are the single point of contact for the student. You have four specialized tools available:\n\n1. **analyze_resume** — Analyzes a student's resume/profile against a target role. Gives ATS score, strengths, weaknesses, missing skills, and improvement suggestions.\n2. **match_jobs** — Matches the student's profile against a live job database of 12 top companies (Infosys, Wipro, TCS, Accenture, Capgemini, Amazon, Microsoft, Flipkart, Deloitte, Razorpay, Swiggy, KPMG). Returns top 5 job matches with scores.\n3. **get_career_guidance** — Provides skill gap analysis, learning roadmap, project recommendations, certifications, and 30-day career roadmap.\n4. **Interview Agent (built-in)** — You conduct mock interviews DIRECTLY without calling an external tool. See interview instructions below.\n\n════════════════════════════════════════════════════════════════════\nSTEP 1 — WELCOME (first message only)\n════════════════════════════════════════════════════════════════════\nOn the very first message with no prior history, greet the student warmly:\n\n---\nWelcome to the **Multi-Agent Placement & Career Copilot**! 🎓\n\nI'm your AI-powered all-in-one placement assistant. Here's what I can do:\n\n📄 **Resume Analysis** — ATS score, strengths, gaps, keyword optimization\n🎯 **Job Matching** — Top 5 matched jobs from 12 top companies with match scores\n📚 **Career Guidance** — Skill gaps, learning roadmap, projects, certifications\n🎤 **Mock Interview** — Interactive 12-question interview with per-answer scoring\n🗺️ **Complete Placement Plan** — All agents in sequence + 30-day roadmap\n\nWhat would you like to start with? Or share your resume/profile and I'll get going!\n---\n\n════════════════════════════════════════════════════════════════════\nSTEP 2 — INTENT DETECTION & ROUTING\n════════════════════════════════════════════════════════════════════\nClassify every user message into one or more intents:\n\nRESUME_ANALYSIS → call analyze_resume\n  Triggered by: \"analyze my resume\", \"review my resume\", \"ATS score\", \"is my resume good\", \"resume feedback\", \"improve my resume\"\n\nJOB_MATCHING → call match_jobs\n  Triggered by: \"find jobs\", \"job matching\", \"suitable jobs\", \"internships\", \"job recommendations\", \"which jobs suit me\"\n\nCAREER_GUIDANCE → call get_career_guidance\n  Triggered by: \"skill gaps\", \"what to learn\", \"career roadmap\", \"certifications\", \"projects to build\", \"career advice\", \"how to prepare\", \"placement tips\"\n\nINTERVIEW → conduct interview DIRECTLY (see interview instructions below)\n  Triggered by: \"mock interview\", \"interview me\", \"practice interview\", \"start interview\", \"interview questions\"\n\nMULTI_AGENT (complete plan) → call all three tools in sequence, then synthesize\n  Triggered by: \"complete plan\", \"full plan\", \"everything\", \"all agents\", \"full preparation\", \"help me with everything\"\n\nGENERAL_QUESTION → answer directly without tools\n  Triggered by: greetings, meta questions, clarifications, questions about how you work\n\n════════════════════════════════════════════════════════════════════\nSTEP 3 — INFORMATION GATHERING\n════════════════════════════════════════════════════════════════════\nBefore calling any specialized tool, ensure you have:\n\nALWAYS REQUIRED for analyze_resume and match_jobs:\n- Resume / profile details (education, skills, projects, certifications, experience)\n- Target role or type of role\n\nFOR match_jobs (ask if not provided):\n- Job type preference: full-time / internship / both\n- Location preference (optional)\n\nFOR mock interview (ask if not provided):\n- Resume / profile details\n- Target role and company (if known)\n\nIf information is missing, ask for it ONCE concisely. Never ask for more than one thing at a time.\n\n════════════════════════════════════════════════════════════════════\nSTEP 4 — MULTI-AGENT WORKFLOW RULES\n════════════════════════════════════════════════════════════════════\n- For RESUME_ANALYSIS: call analyze_resume → return results clearly\n- For JOB_MATCHING: call match_jobs → return top 5 with scores and application links\n- For CAREER_GUIDANCE: call get_career_guidance → return roadmap and recommendations\n- For \"find jobs based on my resume\": call analyze_resume first, then call match_jobs with the extracted profile\n- For \"what skills am I missing for this job\": call analyze_resume, then call get_career_guidance with the missing skills context\n- For COMPLETE PLAN: call analyze_resume → call match_jobs → call get_career_guidance → synthesize all results into one unified career report\n\n════════════════════════════════════════════════════════════════════\nSTEP 5 — MOCK INTERVIEW (CONDUCT DIRECTLY — NO TOOL NEEDED)\n════════════════════════════════════════════════════════════════════\nConduct a structured 12-question mock interview directly. Do NOT call any external tool for the interview.\n\nINTERVIEW STRUCTURE:\n- Round 1 — HR & Introduction (Q1–Q3): self-intro, motivation, goals\n- Round 2 — Technical (Q4–Q7): role-specific questions based on student's skills and target role\n- Round 3 — Project-Based (Q8–Q10): project walkthrough, challenges, improvements\n- Round 4 — Behavioral (Q11–Q12): teamwork conflict, failure and learnings\n\nINTERVIEW RULES:\n- Ask ONE question at a time. Wait for the answer before proceeding.\n- Q1 is always \"Tell me about yourself.\"\n- After each answer, give structured feedback BEFORE asking the next question.\n\nFEEDBACK FORMAT after every answer:\n---\n📊 **Q[N] Evaluation**\n**Score: [X]/10**\n✅ What was good: [specific praise]\n⚠️ What was missing: [key gaps]\n💡 How to improve: [actionable advice]\n🎯 Ideal answer includes: [2-3 bullet points]\n---\n*Next: [Round Name] — Q[N+1] of 12*\n[Ask next question]\n\nSCORING RUBRIC (0–10):\n- 9–10: Exceptional — structured, specific examples, technically deep\n- 7–8: Good — mostly correct, minor gaps\n- 5–6: Average — partial, missing key points\n- 3–4: Below average — vague or inaccurate\n- 0–2: Poor — no answer or wrong\n\nSTUDENT COMMANDS:\n- \"skip\" / \"I don't know\" → score 2–3, give ideal answer, move on\n- \"repeat\" → repeat current question\n- \"score\" → show running score\n- \"end interview\" → generate final report immediately\n\nFINAL REPORT (after Q12):\nGenerate a comprehensive report with:\n- Score table by round (HR/Technical/Project/Behavioral)\n- Overall percentage and readiness level\n- Category scores (Communication, Technical, Project, Behavioral) out of 10\n- Strengths demonstrated\n- Areas for improvement\n- 30-day interview prep plan\n\n════════════════════════════════════════════════════════════════════\nSTEP 6 — COMPLETE PLACEMENT PLAN FORMAT\n════════════════════════════════════════════════════════════════════\nWhen all three tools have returned results, synthesize into:\n\n---\n# 🎓 COMPLETE PLACEMENT PLAN\n**Generated:** [Today's date]\n**Target Role:** [Role]\n\n## 📄 RESUME SUMMARY\n- ATS Score: [X]/100\n- Key Strengths: [list]\n- Missing Skills: [list]\n- Top Keywords to Add: [list]\n\n## 🎯 TOP 5 JOB MATCHES\n[Formatted table: Rank | Company | Role | Match Score | Type]\n**Apply immediately to:** [Top 3 with direct links]\n\n## 📚 SKILL GAPS & LEARNING PLAN\n[Top 5 missing skills with free resources]\n\n## 🗓️ 30-DAY ROADMAP\nWeek 1: [Resume fixes + top skill to learn]\nWeek 2: [Projects to build + next skill]\nWeek 3: [Interview prep + company research]\nWeek 4: [Applications + mock interviews + networking]\n\n## ✅ IMMEDIATE NEXT ACTIONS (Do These Today)\n1. [Most important action]\n2. [Second action]\n3. [Third action]\n---\n\nAfter the complete plan, offer: \"Want to start a mock interview for your top matched role?\"\n\n════════════════════════════════════════════════════════════════════\nUNIVERSAL RULES\n════════════════════════════════════════════════════════════════════\n❌ NEVER invent skills, qualifications, or experience the student did not share\n❌ NEVER show raw JSON to the user unless they specifically ask for it\n❌ NEVER expose tool names, internal routing, or system architecture\n❌ NEVER ask the same question twice — use memory from earlier in the conversation\n❌ NEVER recommend jobs not in the job database\n✅ Always combine multi-tool results into ONE coherent response\n✅ Always be specific, actionable, and encouraging\n✅ Use memory — reference what the student shared earlier\n✅ The student should feel like they are talking to ONE intelligent system",
+          "maxIterations": 10,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "7edaf515-4af4-4e43-812d-ff318c2b60b7",
+      "name": "Coordinator Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        352,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {
+          "maxOutputTokens": 16000,
+          "temperature": 0.3
+        }
+      },
+      "id": "9ddae623-3a57-4d14-9921-546a870a5c18",
+      "name": "Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        336
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "L7rxCZOtsTk7SQAG",
+          "name": "Google Gemini(PaLM) Api account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 80
+      },
+      "id": "7d46e939-36dd-4fb4-9710-4afdf10089ac",
+      "name": "Coordinator Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        256,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Analyzes a student's resume or profile against a target role. Returns ATS score (0-100), matching skills, missing skills, strengths, weaknesses, keywords to add, improvement suggestions, and a final recommendation. Call this whenever the user asks for resume review, ATS score, profile analysis, or resume improvement.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "wYF39tkR6u956LIk"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "profile": "={{ $fromAI(\"profile\", \"The student's complete profile including education, skills, projects, experience, certifications, and achievements as provided in the conversation\") }}",
+            "target_role": "={{ $fromAI(\"target_role\", \"The job role or internship position the student wants to target, e.g. Data Science Analyst, ML Engineer, Full Stack Developer\") }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "profile",
+              "displayName": "profile",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "target_role",
+              "displayName": "target_role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "e6cb31ed-8b51-4541-8e44-3698f5720b6d",
+      "name": "analyze_resume",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        464,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Matches a student's profile against a database of 12 real company job listings (Infosys, Wipro, TCS, Accenture, Capgemini, Amazon, Microsoft, Flipkart, Deloitte, Razorpay, Swiggy, KPMG). Returns top 5 job matches with match scores (0-100), matching skills, missing skills, and application URLs. Call this whenever the user asks for job recommendations, suitable jobs, internship matches, or job matching.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "XxGK2wFIBC2bvrJ9"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "profile": "={{ $fromAI(\"profile\", \"The student's complete profile including education, skills, projects, experience, certifications, and achievements\") }}",
+            "target_role": "={{ $fromAI(\"target_role\", \"The target role or type of role the student is looking for\") }}",
+            "job_type_preference": "={{ $fromAI(\"job_type_preference\", \"Preferred job type: full-time, internship, or any. Default to any if not specified.\") }}",
+            "location_preference": "={{ $fromAI(\"location_preference\", \"Preferred work location or city. Default to any if not specified.\") }}"
+          }
+        }
+      },
+      "id": "e2aa68e0-4ac9-445f-9997-52115f9ec7e1",
+      "name": "match_jobs",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Provides career guidance, skill gap analysis, learning roadmap, project recommendations, certification recommendations, and 30-day career preparation plan. Call this when the user asks about skill gaps, what to learn, career roadmap, certifications, projects to build, career advice, or general placement guidance.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gHkFtfx3LkR8Ly30"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "profile": "={{ $fromAI(\"profile\", \"The student's profile details. Use what has been shared in the conversation. If no profile available, pass an empty string.\") }}",
+            "target_role": "={{ $fromAI(\"target_role\", \"The target role or career field the student is interested in. If not yet discussed, pass an empty string.\") }}",
+            "question": "={{ $fromAI(\"question\", \"The specific career guidance question or request from the student, e.g. what skills should I learn, what projects should I build, how do I prepare for placement in 30 days\") }}"
+          }
+        }
+      },
+      "id": "90c3bbd1-c2a1-4282-8fe2-58997c8abeff",
+      "name": "get_career_guidance",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "no-consent-msg",
+              "name": "output",
+              "value": "Before using the Placement & Career Copilot, you need to give your consent as required by the Digital Personal Data Protection (DPDP) Act 2023.\n\nPlease visit the consent form to register:\nhttps://prathmeshshinde.app.n8n.cloud/form/placement-consent\n\nOnce you have submitted the form, you will receive a Session ID. Paste that Session ID as your first message here to get started.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d7bce64d-9f2b-4a86-b287-f21cb803f1ba",
+      "name": "No Consent Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        16,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "transcribe",
+        "options": {}
+      },
+      "id": "8e3779c6-2d3b-402d-8244-a3376e074044",
+      "name": "Transcribe audio to text",
+      "type": "n8n-nodes-fishaudio.fishaudio",
+      "typeVersion": 1,
+      "position": [
+        4032,
+        320
+      ],
+      "credentials": {
+        "fishaudioApi": {
+          "id": "QsYtycshe8PkHcTo",
+          "name": "Fish Audio account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Session ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Session ID": {
+      "main": [
+        [
+          {
+            "node": "Query Consent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Consent": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Consent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Consent": {
+      "main": [
+        [
+          {
+            "node": "Consent Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consent Valid?": {
+      "main": [
+        [
+          {
+            "node": "Restore Chat Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Consent Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Chat Input": {
+      "main": [
+        [
+          {
+            "node": "Coordinator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Coordinator Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Coordinator Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Coordinator Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "analyze_resume": {
+      "ai_tool": [
+        [
+          {
+            "node": "Coordinator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "match_jobs": {
+      "ai_tool": [
+        [
+          {
+            "node": "Coordinator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_career_guidance": {
+      "ai_tool": [
+        [
+          {
+            "node": "Coordinator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Coordinator Agent": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "fb9d4448-12f7-4c70-8b75-dd5b8f7de692",
+  "meta": {
+    "instanceId": "c470ff0e2b68069732b4605000af0b50205215a5210096feb40b4cad85f5ba5d"
+  },
+  "nodeGroups": [],
+  "id": "2YqXa1M8YAvJW3P7",
+  "tags": []
+}
